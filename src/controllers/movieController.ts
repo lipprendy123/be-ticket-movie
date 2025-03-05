@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Movie from "../models/Movie";
 import { movieSchema } from "../utils/zodSchema";
 import { title } from "process";
+import path from "path";
 
 export const getMovies = async(req: Request, res: Response): Promise<any> => {
     try {
@@ -81,6 +82,60 @@ export const postMovies = async(req: Request, res: Response): Promise<any> => {
         return res.status(500).json({
             success: false,
             message: 'failed to create data',
+            data: null
+        })
+    }
+}
+
+export const putMovie = async(req: Request, res: Response): Promise<any> => {
+    try {
+        const {id} = req.params;
+
+         const parse = movieSchema.safeParse({
+            title: req.body.title,
+            genre: req.body.genre,
+            teathers: req.body.teathers.split(','),
+            available: req.body.available === "1" || req.body.available === "true",
+            description: req.body.description,
+            price: Number.parseInt(req.body.price),
+            bonus: req.body?.bonus
+        })
+        
+
+        if (!parse.success) {
+            const errorMessages = parse.error.issues.map((err) => err.message)
+
+            return res.status(400).json({
+                message: 'Invalid request',
+                details: errorMessages,
+                status: 'failed'
+            })
+        }
+
+        const oldMovie = await Movie.findById(id)
+
+        if (!oldMovie) {
+            return res.status(400).json({
+                success: false,
+                message: 'Data movie not found',
+                data: null
+            })
+        }
+
+        if (req.file) {
+            const dirname = path.resolve()
+            const filepath = path.join(
+                dirname,
+                "public/uploads/thumbnails",
+                oldMovie.thumbnail
+            )
+        }
+    } catch (error) {
+         console.log(error);
+        
+        return res.status(500).json({
+            success: false,
+            message: 'failed to update data',
             data: null
         })
     }
