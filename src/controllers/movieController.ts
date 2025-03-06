@@ -3,6 +3,9 @@ import Movie from "../models/Movie";
 import { movieSchema } from "../utils/zodSchema";
 import { title } from "process";
 import path from "path";
+import fs from 'fs'
+import Genre from "../models/Genre";
+import Teather from "../models/Teather";
 
 export const getMovies = async(req: Request, res: Response): Promise<any> => {
     try {
@@ -12,6 +15,28 @@ export const getMovies = async(req: Request, res: Response): Promise<any> => {
             succes: true,
             message: 'Get data success',
             data: movies
+        })
+    } catch (error) {
+        console.log(error);
+        
+        return res.status(500).json({
+            success: false,
+            message: 'failed',
+            data: null
+        })
+    }
+}
+
+export const getMoviesDetail = async(req: Request, res: Response): Promise<any> => {
+    try {
+        const {id} = req.params;
+
+        const movie = await Movie.findById(id).populate({path: 'genre', select: 'name'}).populate({path: 'teathers', select: 'name'})
+
+        return res.status(200).json({
+            succes: true,
+            message: 'Get data success',
+            data: movie
         })
     } catch (error) {
         console.log(error);
@@ -129,13 +154,124 @@ export const putMovie = async(req: Request, res: Response): Promise<any> => {
                 "public/uploads/thumbnails",
                 oldMovie.thumbnail
             )
+
+            if (fs.existsSync(filepath)) {
+                fs.unlinkSync(filepath)
+            }
         }
+
+        await Genre.findByIdAndUpdate(oldMovie.genre, {
+            $pull: {
+                movies: oldMovie._id
+            }
+        })
+
+        for(const teather of oldMovie.teathers) {
+            await Teather.findByIdAndUpdate(teather._id, {
+                $pull: {
+                    movies: oldMovie._id
+                }
+            })
+        }        
+
+        await Movie.findByIdAndUpdate(oldMovie._id, {
+            title: parse.data.title,
+            genre: parse.data.genre,
+            available: parse.data.available,
+            teathers: parse.data.teathers,
+            thumbnail: req?.file ? req.file.filename : oldMovie.thumbnail,
+            description: parse.data.description,
+            price: parse.data.price,
+            bonus: parse.data.bonus
+        })
+
+        await Genre.findByIdAndUpdate(parse.data.genre, {
+            $push: {
+                movies: oldMovie._id
+            }
+        })
+
+        for(const teather of parse.data.teathers) {
+            await Teather.findByIdAndUpdate(teather, {
+                $push: {
+                    movies: id
+                }
+            })
+        }        
+
+        const updateMovie = await Movie.findById(id)
+
+        return res.status(200).json({
+            success: true,
+            message: 'Update data success',
+            data: updateMovie
+        })
+
+
     } catch (error) {
          console.log(error);
         
         return res.status(500).json({
             success: false,
             message: 'failed to update data',
+            data: null
+        })
+    }
+}
+
+export const deleteMovie = async(req: Request, res: Response): Promise<any> => {
+    try {
+        const {id} = req.params;
+
+        const movie = await Movie.findById(id)
+
+        if (!movie) {
+            return res.status(400).json({
+                success: false,
+                message: 'Movie not found',
+                data: null
+            })
+        }
+
+        const dirname = path.resolve()
+            const filepath = path.join(
+                dirname,
+                "public/uploads/thumbnails",
+                movie.thumbnail
+            )
+
+            if (fs.existsSync(filepath)) {
+                fs.unlinkSync(filepath)
+            }
+
+            await Genre.findByIdAndUpdate(movie.genre, {
+                        $pull: {
+                            movies: movie._id
+                        }
+                    })
+            
+                    for(const teather of movie.teathers) {
+                        await Teather.findByIdAndUpdate(teather._id, {
+                            $pull: {
+                                movies: teather._id
+                            }
+                        })
+                    }
+
+            await Movie.findByIdAndDelete(id)
+
+            return res.status(200).json({
+                success: true,
+                message: 'Delete movie success',
+                data: movie
+            })
+
+    } catch (error) {
+        console.log(error);
+        
+        return res.status(500).json({
+            success: false,
+            message: 'failed to delete data',
             data: null
         })
     }
