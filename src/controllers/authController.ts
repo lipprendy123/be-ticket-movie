@@ -1,131 +1,133 @@
-import { Request, Response } from "express";
+import type { Request, Response } from "express";
 import { authSchema } from "../utils/zodSchema";
-import bcrypt from 'bcrypt'
-import jwt from 'jsonwebtoken'
 import User from "../models/User";
-import Wallet from "../models/Wallet"
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
+import Wallet from "../models/Wallet";
 
-export const register = async (req: Request, res: Response): Promise<any> => {
-    try {
-        const parse = authSchema.omit({ role: true }).safeParse(req.body);
+export const login = async (req: Request, res: Response): Promise<any> => {
+	try {
+		const parse = authSchema
+			.omit({
+				name: true,
+			})
+			.parse(req.body);
 
-        if (!parse.success) {
-            const errorMessages = parse.error.issues.map((err) => err.message);
+		const checkUser = await User.findOne({
+			email: parse.email,
+			role: parse.role,
+		});
 
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid request',
-                data: errorMessages
-            });
-        }
+		if (!checkUser) {
+			return res.status(400).json({
+				message: "Email not registered",
+				data: null,
+				status: "failed",
+			});
+		}
 
-        const emailExisted = await User.findOne({ email: parse.data.email });
+		const comparePassword = bcrypt.compareSync(
+			parse.password,
+			checkUser.password,
+		);
 
-        if (emailExisted) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email already exists',
-                data: null
-            });
-        }
+		if (!comparePassword) {
+			return res.status(400).json({
+				message: "Email / Password incorrect",
+				data: null,
+				status: "failed",
+			});
+		}
 
-        const hashPassword = bcrypt.hashSync(parse.data.password, 12)
+		const secretKey = process.env.JWT_SECRET ?? "";
 
-        const user = new User({
-            name: parse.data.name,
-            email: parse.data.email,
-            password: hashPassword,
-            role: 'customer',
-            photo: req.file?.filename
-        })
-        
-        const wallet = new Wallet({
-            balance: 0,
-            user: user._id
-        })
+		const token = jwt.sign(
+			{
+				data: {
+					id: checkUser.id,
+				},
+			},
+			secretKey,
+			{ expiresIn: "24h" },
+		);
 
-        await user.save()
-        await wallet.save()
-
-        return res.status(201).json({
-            success: true,
-            message: 'Success sign up',
-            data: {
-                name: user.name,
-                email: user.email
-            }
-        })
-
-    } catch (error) {
-        console.log(error);
-        
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to sign up',
-        });
-    }
+		return res.json({
+			message: "Success login",
+			data: {
+				name: checkUser.name,
+				email: checkUser.email,
+				role: checkUser.role,
+				photoUrl: checkUser.photoUrl,
+				token,
+			},
+			status: "success",
+		});
+	} catch (error) {
+		return res.status(500).json({
+			message: "Failed to login",
+			data: null,
+			status: "failed",
+		});
+	}
 };
 
-export const login = async(req: Request, res: Response): Promise<any> => {
-    try {
-        const parse = authSchema.omit({
-            name: true
-        }).parse(req.body)
+export const register = async (req: Request, res: Response): Promise<any> => {
+	try {
+		const parse = authSchema.safeParse(req.body);
 
-        const checkUser = await User.findOne({
-            email: parse.email,
-            role: parse.role
-        })
+		if (!parse.success) {
+			const errorMessages = parse.error.issues.map((err) => err.message);
 
-        if (!checkUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email not registered',
-                data: null
-            })
-        }
-        
-        if (parse.role && checkUser.role !== parse.role) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid role for this account',
-                data: null
-            })
-        }
-        
-        const comparePassword = bcrypt.compareSync(parse.password, checkUser.password)
+			return res.status(400).json({
+				message: "Invalid request",
+				data: errorMessages,
+				status: "failed",
+			});
+		}
 
-        if (!comparePassword) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email or password incorrect',
-                data: null
-            })
-        }
+		const emailExisted = await User.findOne({
+			email: parse.data.email,
+		});
 
-        const secretKey = process.env.SECRET_KEY ?? ""
+		if (emailExisted) {
+			return res.status(400).json({
+				message: "Email already exist",
+				data: null,
+				status: "failed",
+			});
+		}
 
-        const token = jwt.sign({
-            data: checkUser.id
-        }, secretKey, {expiresIn: '24h'})
-        
-        return res.status(200).json({
-            success: true,
-            message: 'Success login',
-            data: {
-                name: checkUser.name,
-                email: checkUser.email,
-                role: checkUser.role,
-                photoUrl: checkUser.photoUrl,
-                token
-            }
-        })
+		const hashPassword = bcrypt.hashSync(parse.data.password, 12);
 
-    } catch (error) {
-        console.error("Login Error:", error);
-        return res.status(500).json({
-            success: false,
-            message: 'Failed to login'
-        });
-    }
-}
+		const user = new User({
+			name: parse.data.name,
+			email: parse.data.email,
+			password: hashPassword,
+			role: parse.data.role || "customer",
+			photo: req.file?.filename,
+		});
+
+		const wallet = new Wallet({
+			balance: 0,
+			user: user._id,
+		});
+
+		await user.save();
+		await wallet.save();
+
+		return res.json({
+			message: "Success sign up",
+			data: {
+				name: user.name,
+				email: user.email,
+			},
+			status: "success",
+		});
+	} catch (error) {
+		return res.status(500).json({
+			message: "Failed to register",
+			data: null,
+			status: "failed",
+		});
+	}
+};
