@@ -12,7 +12,7 @@ export const verifyToken = async (
 	res: Response,
 	next: NextFunction,
 ): Promise<any> => {
-	const secretKey = process.env.SECRET_KEY ?? "";
+	const secretKey = process.env.JWT_SECRET ?? "";
 
 	if (req.headers?.authorization?.split(" ")[0] === "JWT") {
 		const token = req.headers?.authorization?.split(" ")[1];

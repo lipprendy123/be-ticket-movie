@@ -28,7 +28,15 @@ const transactionSchema = new mongoose.Schema({
     teather: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Teather'
-    }
+    },
+    data: {
+        type: String,
+        required: true
+    },
+    seats: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TransactionSeat'
+    }]
 })
 
 export default mongoose.model('Transaction', transactionSchema, 'transactions')
