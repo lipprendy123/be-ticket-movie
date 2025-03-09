@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Movie from "../models/Movie";
 import Genre from "../models/Genre";
 import Transaction from "../models/Transaction";
+import Teather from "../models/Teather";
 
 export const getMovies = async(req: Request, res: Response): Promise<any> => {
     try {
@@ -125,6 +126,89 @@ export const getAvailableSeats = async(req: Request, res: Response): Promise<any
             message: 'Get data success',
             data: seats
         })
+    } catch (error) {
+        console.log(error);
+        
+        return res.status(500).json({
+            success: false,
+            message: 'Get data failed',
+            data: null
+        })
+    }
+}
+
+export const getMoviesFilter = async(req: Request, res: Response): Promise<any> => {
+    try {
+        const {genreId} = req.params;
+        const {city, teathers, availbility} = req.query;
+
+        let filterQuery: any = {}
+
+        if (genreId) {
+            filterQuery = {
+                ...filterQuery,
+                genre: genreId
+            }
+        }
+
+        if (city) {
+            const teathers_list = await Teather.find({
+                city: city
+            })
+
+            const teatherIds = teathers_list.map((the) => the.id)
+
+            filterQuery = {
+                ...filterQuery,
+                teathers: {
+                    $in: [...teatherIds]
+                }
+            }
+        }
+
+        if (teathers) {
+            const teatherIds2 = teathers as string[]
+
+            filterQuery = {
+                ...filterQuery,
+                teathers: {
+                    $in: [...(filterQuery?.teathers.$in ?? []), teatherIds2]
+                }
+            }
+        }
+
+        if (availbility === 'true') {
+            filterQuery = {
+                ...filterQuery,
+                available: true
+            }
+        }
+
+        const data = await Movie.find({
+            ...filterQuery
+        }).select('title genre thumbnail').populate({
+            path: 'genre',
+            select: 'name'
+        })
+
+        const allData = await Movie.find().select('title genre teathers thumbnail').populate({
+            path: 'genre',
+            select: 'name'
+        }).populate({
+            path: 'teathers',
+            select: 'city'
+        })
+
+
+        return res.status(200).json({
+            success: true,
+            message: 'Success get data',
+            data: {
+                filterMovies: data,
+                allMovies: allData
+            }
+        })
+
     } catch (error) {
         console.log(error);
         
